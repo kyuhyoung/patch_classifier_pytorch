@@ -59,25 +59,41 @@ def shortcut(nInputPlane, nOutputPlane, stride, shortcutType):
     if useConv:
         # 1x1 convolution
         s = nn.Sequential()
-        s.add_module(nn.Conv2d(nInputPlane, nOutputPlane, kernel_size=1, stride=stride))
-        s.add_module(nn.BatchNorm2d(nOutputPlane))
+        s.add_module('sc_conv', nn.Conv2d(nInputPlane, nOutputPlane, kernel_size=1, stride=stride))
+        s.add_module('sc_bn', nn.BatchNorm2d(nOutputPlane))
         #return s
     elif nInputPlane != nInputPlane:
         # Strided, zero - padded identity shortcut
         s = nn.Sequential()
         #:add(nn.SpatialAveragePooling(1, 1, stride, stride))
-        s.add_module(nn.AvgPool2d(7))
+        s.add_module('sc_ap', nn.AvgPool2d(7))
         #:add(nn.Concat(2)
-        s.add_module(torch.cat(nn.Identity(), nn.MulConstant(0)))
+        s.add_module('sc_cat', torch.cat(nn.Identity(), nn.MulConstant(0)))
         return s
     else:
-        return torch.legacy.nn.Identity()
+        #return torch.legacy.nn.Identity()
+        return Aidentity()
 
+'''
 def sum_and_relu(residual, n, m, stride, shortcut_type):
     s = nn.Sequential()
     s.add_module(residual + shortcut(n, m, stride, shortcut_type))
     s.add_module(nn.ReLU(inplace=True))
     return s
+'''
+class Sum_and_ReLU(nn.Module):
+    def __init__(self, residual, n, m, stride, shortcut_type):
+        super(Sum_and_ReLU, self).__init__()
+
+        self.short_cut = shortcut(n, m, stride, shortcut_type)
+        self.residual = residual
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        aidentity = self.short_cut(x)
+        residual = self.residual(x)
+        val = self.relu(aidentity + residual)
+        return val
 
 
 def bottleneck(n, stride, shortcut_type):
@@ -96,32 +112,32 @@ def bottleneck(n, stride, shortcut_type):
     r.add_module('c3', nn.Conv2d(n, m, kernel_size=1))
     r.add_module('b3', nn.BatchNorm2d(n))
 
-    return sum_and_relu(r, n, m, stride, shortcut_type)
+    return Sum_and_ReLU(r, n, m, stride, shortcut_type)
 
 
 def two_way(n, stride, shortcut_type):
     m = n * stride
     r = nn.Sequential()
-    r.add_module(bottleneck(n, 1, shortcut_type))
-    r.add_module(bottleneck(n, stride, shortcut_type))
-    return sum_and_relu(r, n, m, stride, shortcut_type)
+    r.add_module('bottle_2_1', bottleneck(n, 1, shortcut_type))
+    r.add_module('bottle_2_2', bottleneck(n, stride, shortcut_type))
+    return Sum_and_ReLU(r, n, m, stride, shortcut_type)
 
 
 
 def four_way(n, stride, shortcut_type):
     m = n * stride
     r = nn.Sequential()
-    r.add_module(two_way(n, 1, shortcut_type))
-    r.add_module(two_way(n, stride, shortcut_type))
-    return sum_and_relu(r, n, m, stride, shortcut_type)
+    r.add_module('bottle_4_1', two_way(n, 1, shortcut_type))
+    r.add_module('bottle_4_2', two_way(n, stride, shortcut_type))
+    return Sum_and_ReLU(r, n, m, stride, shortcut_type)
 
 
 def eight_way(n, stride, shortcut_type):
     m = n * stride
     r = nn.Sequential()
-    r.add_module(four_way(n, 1, shortcut_type))
-    r.add_module(four_way(n, stride, shortcut_type))
-    return sum_and_relu(r, n, m, stride, shortcut_type)
+    r.add_module('bottle_8_1', four_way(n, 1, shortcut_type))
+    r.add_module('bottle_8_2', four_way(n, stride, shortcut_type))
+    return Sum_and_ReLU(r, n, m, stride, shortcut_type)
 
 
 class Ellie(nn.Module):
@@ -141,9 +157,9 @@ class Ellie(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         #self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer = nn.Sequential()
-        for l in layers:
-            self.layer.add_module(self._make_layer(l, 1, 2, shortcut_type))
-
+        for idx, l in enumerate(layers):
+            self.layer.add_module('layer_%d' % (idx), self._make_layer(l, 1, 2, shortcut_type))
+        '''
         self.layer16 = self._make_layer(16, 1, 2)
         self.layer32 = self._make_layer(16, 1, 2)
         self.layer64 = self._make_layer(16, 1, 2)
@@ -154,7 +170,7 @@ class Ellie(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
+        '''
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -187,7 +203,7 @@ class Ellie(nn.Module):
         s = nn.Sequential()
         for i in range(count - 1):
             s.add_module(eight_way(features, 1, shortcut_type))
-        s.add_module(eight_way(features, stride, shortcut_type))
+        s.add_module('layer_8way', eight_way(features, stride, shortcut_type))
         return s
     '''
     def forward(self, x):
