@@ -1,7 +1,12 @@
 import torch.nn as nn
 import torch
-import torch.legacy.nn.Identity
 
+
+class Aidentity(nn.Module):
+    def __init__(self):
+        return
+    def forward(self, x):
+        return x
 
 class Bottleneck(nn.Module):
     expansion = 4
