@@ -1,11 +1,40 @@
 import torch.nn as nn
 import torch
+import math
+import numpy as np
 
 
 class Aidentity(nn.Module):
     def __init__(self):
+        super(Aidentity, self).__init__()
         return
     def forward(self, x):
+        return x
+
+class Set_Naver_Zero(nn.Module):
+    def __init__(self, margin):
+        super(Set_Naver_Zero, self).__init__()
+        self.margin = margin
+        return
+    def forward(self, x):
+        #n_batch, n_channel, height, width = x.size()
+        #x.data[:, :, :, :] = 1
+        #t1 = np.count_nonzero(x.data.numpy())
+        x.data[:, :, :self.margin, :] = 0
+        #t2 = np.count_nonzero(x.data.numpy())
+        #t3 = t1 - t2
+        #t4 = self.margin * width * n_channel * n_batch
+        x.data[:, :, -self.margin:, :] = 0
+        #t5 = np.count_nonzero(x.data.numpy())
+        #t6 = t2 - t5
+        x.data[:, :, :, :self.margin] = 0
+        #t7 = np.count_nonzero(x.data.numpy())
+        #t8 = t6 - t7
+        #t9 = t8 * 3
+        x.data[:, :, :, -self.margin:] = 0
+        #t10 = np.count_nonzero(x.data.numpy())
+        #t11 = t7 - t10
+        #t12 = t11 * 3
         return x
 
 class Bottleneck(nn.Module):
@@ -61,7 +90,7 @@ def shortcut(nInputPlane, nOutputPlane, stride, shortcutType):
         s = nn.Sequential()
         s.add_module('sc_conv', nn.Conv2d(nInputPlane, nOutputPlane, kernel_size=1, stride=stride))
         s.add_module('sc_bn', nn.BatchNorm2d(nOutputPlane))
-        #return s
+        return s
     elif nInputPlane != nInputPlane:
         # Strided, zero - padded identity shortcut
         s = nn.Sequential()
@@ -144,12 +173,44 @@ class Ellie(nn.Module):
 
     #def __init__(self, block, layers, num_classes=1000):
     def __init__(self, shortcut_type):
-        #block = Bottleneck
+        super(Ellie, self).__init__()
+        self.fc = nn.Linear(2048, 8)
+        self.sigmoid = nn.Sigmoid()
+        self.model_small = nn.Sequential(
+            #nn.ZeroPad2d(-240),
+            Set_Naver_Zero(240),
+            nn.Conv2d(3, 16, kernel_size=7, stride=1, padding=3, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            self._make_layer(16, 2, 2, shortcut_type),
+            self._make_layer(32, 2, 2, shortcut_type),
+            self._make_layer(64, 2, 2, shortcut_type),
+            self._make_layer(128, 2, 2, shortcut_type),
+            self._make_layer(256, 2, 2, shortcut_type),
+            self._make_layer(512, 2, 2, shortcut_type),
+            nn.AvgPool2d(kernel_size=4, stride=1)
+        )
+
+        self.model_large = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            self._make_layer(16, 2, 2, shortcut_type),
+            self._make_layer(32, 2, 2, shortcut_type),
+            self._make_layer(64, 2, 2, shortcut_type),
+            self._make_layer(128, 2, 2, shortcut_type),
+            self._make_layer(256, 2, 2, shortcut_type),
+            self._make_layer(512, 2, 2, shortcut_type),
+            nn.AvgPool2d(kernel_size=3, stride=1)
+        )
+        '''
         layers = [16, 32, 64, 128, 256]
         block = bottleneck
         num_classes = 8
         self.inplanes = 64
-        super(Ellie, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -159,25 +220,23 @@ class Ellie(nn.Module):
         self.layer = nn.Sequential()
         for idx, l in enumerate(layers):
             self.layer.add_module('layer_%d' % (idx), self._make_layer(l, 1, 2, shortcut_type))
+
         '''
-        self.layer16 = self._make_layer(16, 1, 2)
-        self.layer32 = self._make_layer(16, 1, 2)
-        self.layer64 = self._make_layer(16, 1, 2)
-        self.layer128 = self._make_layer(16, 1, 2)
-        self.layer256 = self._make_layer(16, 1, 2)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-        '''
-        for m in self.modules():
+        #for m in self.modules():
+        #for idx, m in enumerate(self.modules()):
+        for idx, (name, m) in enumerate(self.named_modules()):
             if isinstance(m, nn.Conv2d):
+                #print('%d : %s, nn.Conv2d' % (idx, name))
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.BatchNorm2d):
+                #print('%d : %s, nn.BatchNorm2d' % (idx, name))
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+            else:
+                #print('%d : %s, else' % (idx, name))
+                a = 0
+        return
     '''
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -202,7 +261,7 @@ class Ellie(nn.Module):
 
         s = nn.Sequential()
         for i in range(count - 1):
-            s.add_module(eight_way(features, 1, shortcut_type))
+            s.add_module(str(i), eight_way(features, 1, shortcut_type))
         s.add_module('layer_8way', eight_way(features, stride, shortcut_type))
         return s
     '''
@@ -225,39 +284,10 @@ class Ellie(nn.Module):
     '''
     def forward(self, x_input):
 
-        x_small = self.conv1(x_input)
-        x_small = self.bn1(x_small)
-        x_small = self.relu(x_small)
-        x_small = self.maxpool(x_small)
-
-        x_small = self.layer1(x_small)
-        x_small = self.layer2(x_small)
-        x_small = self.layer3(x_small)
-        x_small = self.layer4(x_small)
-
-        x_small = self.avgpool(x_small)
-        x_small = x_small.view(x_small.size(0), -1)
-        x_small = self.fc(x_small)
-
-        x_large = self.conv1(x_input)
-        x_large = self.bn1(x_large)
-        x_large = self.relu(x_large)
-        x_large = self.maxpool(x_large)
-
-        x_large = self.layer1(x_large)
-        x_large = self.layer2(x_large)
-        x_large = self.layer3(x_large)
-        x_large = self.layer4(x_large)
-
-        x_large = self.avgpool(x_large)
-        x_large = x.view(x_large.size(0), -1)
-        x_large = self.fc(x_large)
-
+        x_small = self.model_small(x_input)
+        x_large = self.model_large(x_input)
         x = torch.cat(x_small, x_large)
-        x = self.layer4(x)
-        x = self.avgpool(x)
         x = x.view(2048)
         x = self.fc(x)
-        x = nn.Sigmoid()(x)
-
+        x = self.sigmoid(x)
         return x

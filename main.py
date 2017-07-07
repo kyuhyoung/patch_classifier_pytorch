@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
-import torchvision.transforms as transforms
+import torchvision.transforms
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -32,19 +32,28 @@ class ImageNetCustomFile(torch.utils.data.Dataset):
         self.size_img = (size, size)
         #self.num_samples = data_size
         #self.transform = data_transform
-        self.li_fn_img = []
+        idx_label = 0
+        self.li_fn_img_label = []
+        self.to_tensor = torchvision.transforms.ToTensor()
         for dirpath, dirnames, filenames in os.walk(dataset_path):
-            print('Reading image names under %s' % (dirpath))
-            self.li_fn_img += \
-                [join(dirpath, f) for f in filenames
+            n_file_1 = len(filenames)
+            if n_file_1:
+                li_fn_label = [(join(dirpath, f), idx_label) for f in filenames
                  if f.lower().endswith(ext_img.lower())]
-            if self.__len__() > 100:
-                break
+                n_file_2 = len(li_fn_label)
+                if n_file_2:
+                    label = basename(dirpath)
+                    print('Reading image names under %s' % (dirpath))
+                    self.li_fn_img_label += li_fn_label
+                    idx_label += 1
+                    if self.__len__() > 10000:
+                        break
         return
 
     def __getitem__(self, index):
 
-        fn_img = self.li_fn_img[index]
+        fn_img, target = self.li_fn_img_label[index]
+        #fn_img = self.li_fn_img[index]
         # doing this so that it is consistent with all other datasets
         # to return a PIL Image
         #img = Image.fromarray(img)
@@ -53,15 +62,17 @@ class ImageNetCustomFile(torch.utils.data.Dataset):
         im_bgr = cv2.resize(im_bgr, self.size_img, interpolation=cv2.INTER_AREA)
         #if self.transform is not None:
             #img = self.transform(img)
-        im_lab = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2LAB)
+        #im_lab = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2LAB)
+        im_rgb = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2RGB)
         #t1, t2 = torch.from_numpy(im_lab[:, :, 0:1]), torch.from_numpy(im_lab[:, :, 1:])
         #return torch.from_numpy(im_lab[:, :, 0:1]), torch.from_numpy(im_lab[:, :, 1:])
         #return im_lab[:, :, 0:1].astype(np.float32), torch.from_numpy(im_lab[:, :, 1:].astype(np.float32))
         #t1, t2 = ToTensor2(im_lab[:, :, 0:1]), ToTensor2(im_lab[:, :, 1:])
-        return ToTensor2(im_lab[:, :, 0:1]), ToTensor2(im_lab[:, :, 1:])
+        return self.to_tensor(im_rgb), target
+
 
     def __len__(self):
-        return len(self.li_fn_img)
+        return len(self.li_fn_img_label)
 
 
 def softmaxND(input, axis=1):
@@ -527,7 +538,8 @@ def main():
     #n_img_per_batch = 60
     n_img_per_batch = 2
     n_worker = 4
-    size_img = 256
+    #size_img = 256
+    size_img = 720
     #n_class = 300
     shortcut_type = 'B'
     interval_train_loss = int(round(20000 / n_img_per_batch)) * n_img_per_batch
