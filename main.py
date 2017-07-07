@@ -537,7 +537,8 @@ def main():
     #n_img_per_batch = 40
     #n_img_per_batch = 60
     n_img_per_batch = 2
-    n_worker = 4
+    #n_worker = 4
+    n_worker = 1
     #size_img = 256
     size_img = 720
     #n_class = 300
