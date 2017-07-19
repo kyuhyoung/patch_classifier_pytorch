@@ -139,7 +139,7 @@ def bottleneck(n, stride, shortcut_type):
     r.add_module('a2', nn.ReLU(inplace=True))
 
     r.add_module('c3', nn.Conv2d(n, m, kernel_size=1))
-    r.add_module('b3', nn.BatchNorm2d(n))
+    r.add_module('b3', nn.BatchNorm2d(m))
 
     return Sum_and_ReLU(r, n, m, stride, shortcut_type)
 
@@ -178,17 +178,18 @@ class Ellie(nn.Module):
         self.sigmoid = nn.Sigmoid()
         self.model_small = nn.Sequential(
             #nn.ZeroPad2d(-240),
-            Set_Naver_Zero(240),
-            nn.Conv2d(3, 16, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True),
-            self._make_layer(16, 2, 2, shortcut_type),
-            self._make_layer(32, 2, 2, shortcut_type),
-            self._make_layer(64, 2, 2, shortcut_type),
-            self._make_layer(128, 2, 2, shortcut_type),
-            self._make_layer(256, 2, 2, shortcut_type),
-            self._make_layer(512, 2, 2, shortcut_type),
-            nn.AvgPool2d(kernel_size=4, stride=1)
+            Set_Naver_Zero(240)
+            , nn.Conv2d(3, 16, kernel_size=7, stride=1, padding=3, bias=False)
+            , nn.BatchNorm2d(16)
+            , nn.ReLU(inplace=True)
+            , self._make_layer(16, 2, 2, shortcut_type)
+            , self._make_layer(32, 2, 2, shortcut_type)
+            , self._make_layer(64, 2, 2, shortcut_type)
+            , self._make_layer(128, 2, 2, shortcut_type)
+            , self._make_layer(256, 2, 2, shortcut_type)
+            , self._make_layer(512, 2, 2, shortcut_type)
+            , nn.AvgPool2d(kernel_size=4, stride=1)
+
         )
 
         self.model_large = nn.Sequential(

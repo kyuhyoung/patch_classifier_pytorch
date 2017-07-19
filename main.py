@@ -536,7 +536,8 @@ def main():
     n_epoch = 50
     #n_img_per_batch = 40
     #n_img_per_batch = 60
-    n_img_per_batch = 2
+    #n_img_per_batch = 2
+    n_img_per_batch = 1
     #n_worker = 4
     n_worker = 1
     #size_img = 256
