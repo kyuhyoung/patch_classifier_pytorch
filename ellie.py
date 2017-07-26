@@ -37,6 +37,8 @@ class Set_Naver_Zero(nn.Module):
         #t12 = t11 * 3
         return x
 
+
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -174,12 +176,14 @@ class Ellie(nn.Module):
     #def __init__(self, block, layers, num_classes=1000):
     def __init__(self, shortcut_type):
         super(Ellie, self).__init__()
-        self.fc = nn.Linear(2048, 8)
+        #self.fc = nn.Linear(2048, 8)
+        self.fc = nn.Linear(2048, 3)
         self.sigmoid = nn.Sigmoid()
         self.model_small = nn.Sequential(
             #nn.ZeroPad2d(-240),
-            Set_Naver_Zero(240)
-            , nn.Conv2d(3, 16, kernel_size=7, stride=1, padding=3, bias=False)
+            #Set_Naver_Zero(240)
+            #Crop_Center(240)
+            nn.Conv2d(3, 16, kernel_size=7, stride=1, padding=3, bias=False)
             , nn.BatchNorm2d(16)
             , nn.ReLU(inplace=True)
             , self._make_layer(16, 2, 2, shortcut_type)
@@ -189,7 +193,6 @@ class Ellie(nn.Module):
             , self._make_layer(256, 2, 2, shortcut_type)
             , self._make_layer(512, 2, 2, shortcut_type)
             , nn.AvgPool2d(kernel_size=4, stride=1)
-
         )
 
         self.model_large = nn.Sequential(
@@ -207,6 +210,8 @@ class Ellie(nn.Module):
             self._make_layer(512, 2, 2, shortcut_type),
             nn.AvgPool2d(kernel_size=3, stride=1)
         )
+
+        self.model_small_large = nn
         '''
         layers = [16, 32, 64, 128, 256]
         block = bottleneck
@@ -257,14 +262,21 @@ class Ellie(nn.Module):
         return nn.Sequential(*layers)
     '''
 
-
+    '''
     def _make_layer(self, features, count, stride, shortcut_type):
-
         s = nn.Sequential()
         for i in range(count - 1):
             s.add_module(str(i), eight_way(features, 1, shortcut_type))
         s.add_module('layer_8way', eight_way(features, stride, shortcut_type))
         return s
+    '''
+    def _make_layer(self, features, count, stride, shortcut_type):
+        s = nn.Sequential()
+        for i in range(count - 1):
+            s.add_module(str(i), four_way(features, 1, shortcut_type))
+        s.add_module('layer_8way', four_way(features, stride, shortcut_type))
+        return s
+
     '''
     def forward(self, x):
         x = self.conv1(x)
@@ -283,12 +295,15 @@ class Ellie(nn.Module):
 
         return x
     '''
-    def forward(self, x_input):
-
-        x_small = self.model_small(x_input)
-        x_large = self.model_large(x_input)
-        x = torch.cat(x_small, x_large)
-        x = x.view(2048)
+    #def forward(self, x_input):
+    def forward(self, x_center, x_naver):
+        #x_small = self.model_small(x_input)
+        #x_large = self.model_large(x_input)
+        x_small = self.model_small(x_center)
+        x_large = self.model_large(x_naver)
+        x = torch.cat([x_small, x_large], 1)
+        #x = self.model_small_large(x_small, x_large)
+        x = x.view(-1, 2048)
         x = self.fc(x)
         x = self.sigmoid(x)
         return x

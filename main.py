@@ -27,9 +27,14 @@ from ellie import Ellie
 
 class ImageNetCustomFile(torch.utils.data.Dataset):
     #def __init__(self, dataset_path, data_size, data_transform, li_label, ext_img):
-    def __init__(self, dataset_path, size, ext_img):
+    def __init__(self, dataset_path, size_naver, size_center, ext_img):
         self.dataset_path = dataset_path
-        self.size_img = (size, size)
+        self.size_img = (size_naver, size_naver)
+        self.size_center = size_center
+        margin = int(round(0.5 * (size_naver - size_center)))
+        self.x_f, self.y_f = margin, margin
+        self.x_t, self.y_t = self.x_f + self.size_center, self.y_f + self.size_center
+
         #self.num_samples = data_size
         #self.transform = data_transform
         idx_label = 0
@@ -68,7 +73,11 @@ class ImageNetCustomFile(torch.utils.data.Dataset):
         #return torch.from_numpy(im_lab[:, :, 0:1]), torch.from_numpy(im_lab[:, :, 1:])
         #return im_lab[:, :, 0:1].astype(np.float32), torch.from_numpy(im_lab[:, :, 1:].astype(np.float32))
         #t1, t2 = ToTensor2(im_lab[:, :, 0:1]), ToTensor2(im_lab[:, :, 1:])
-        return self.to_tensor(im_rgb), target
+        #x_f, y_f = self.margin, self.margin
+        #x_t, y_t = x_f + self.size_center, y_f + self.size_center
+        #return self.to_tensor(im_rgb), target
+        return self.to_tensor(im_rgb), \
+               self.to_tensor(im_rgb[self.x_f:self.x_t, self.y_f:self.y_t]), target
 
 
     def __len__(self):
@@ -277,7 +286,7 @@ def prepare_imagenet_dataset(dir_save, foldername_train,
 
 
 #def make_dataloader_custom_file(dir_data, data_transforms, ext_img,                                n_img_per_batch, n_worker):
-def make_dataloader_custom_file(dir_data, size_img, ext_img,
+def make_dataloader_custom_file(dir_data, size_img, size_center, ext_img,
                                 n_img_per_batch, n_worker):
 
     foldername_train, foldername_test = 'train', 'val'
@@ -287,7 +296,7 @@ def make_dataloader_custom_file(dir_data, size_img, ext_img,
     #data_size = {'train' : 50000, 'test' : 10000}
     dsets = {x: ImageNetCustomFile(
         #join(dir_data, x), data_size[x], data_transforms[x], li_class, ext_img)
-        join(dir_data, x), size_img, ext_img)
+        join(dir_data, x), size_img, size_center, ext_img)
              for x in li_set}
     dset_loaders = {x: torch.utils.data.DataLoader(
         dsets[x], batch_size=n_img_per_batch, shuffle=True, num_workers=n_worker) for x in li_set}
@@ -319,12 +328,12 @@ def categorical_crossentropy_color(y_true, y_pred):
 
     return cross_ent
 
-def initialize(is_gpu, dir_data, size_img, #di_set_transform,
+def initialize(is_gpu, dir_data, size_img, size_center, #di_set_transform,
                ext_img, n_img_per_batch, n_worker, shortcut_type):
 
     trainloader, testloader =\
         make_dataloader_custom_file(
-            dir_data, size_img, #di_set_transform,
+            dir_data, size_img, size_center, #di_set_transform,
             ext_img, n_img_per_batch, n_worker)
 
     #net = Net().cuda()
@@ -389,17 +398,23 @@ def train_epoch(
     net.train()
     for i, data in enumerate(trainloader, 0):
         # get the inputs
-        inputs, labels = data
+        #inputs, labels = data
+        inputs_naver, inputs_center, labels = data
         n_img_4_batch = labels.size()[0]
         # wrap them in Variable
         # inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
         if is_gpu:
-            inputs, labels = inputs.cuda(), labels.cuda()
-        inputs, labels = Variable(inputs), Variable(labels)
+            #inputs, labels = inputs.cuda(), labels.cuda()
+            inputs_center, inputs_naver, labels = \
+                inputs_center.cuda(), inputs_naver.cuda(), labels.cuda()
+        #inputs, labels = Variable(inputs), Variable(labels)
+        inputs_center, inputs_naver, labels = \
+            Variable(inputs_center), Variable(inputs_naver), Variable(labels)
         # zero the parameter gradients
         optimizer.zero_grad()
         # forward + backward + optimize
-        outputs = net(inputs)
+        #outputs = net(inputs)
+        outputs = net(inputs_center, inputs_naver)
         # labels += 10
         #loss = criterion(outputs, labels)
         loss = categorical_crossentropy_color(outputs, labels)
@@ -527,8 +542,8 @@ def train(is_gpu, trainloader, testloader, net, criterion, optimizer, scheduler,
 
 def main():
 
-    is_gpu = False
-    #is_gpu = torch.cuda.device_count() > 0
+    #is_gpu = False
+    is_gpu = torch.cuda.device_count() > 0
     #dir_data = './data'
     dir_data = '/mnt/data/data/imagenet'
     ext_img = 'jpeg'
@@ -542,6 +557,7 @@ def main():
     n_worker = 1
     #size_img = 256
     size_img = 720
+    size_center = 240
     #n_class = 300
     shortcut_type = 'B'
     interval_train_loss = int(round(20000 / n_img_per_batch)) * n_img_per_batch
@@ -555,7 +571,7 @@ def main():
     start = time()
     trainloader, testloader, net, criterion, optimizer, scheduler =\
         initialize(
-            is_gpu, dir_data, size_img, #di_set_transform,
+            is_gpu, dir_data, size_img, size_center, #di_set_transform,
             ext_img, n_img_per_batch, n_worker, shortcut_type)
     lap_init = time() - start
     train(is_gpu, trainloader, testloader, net, criterion, optimizer, scheduler,  # li_class,
